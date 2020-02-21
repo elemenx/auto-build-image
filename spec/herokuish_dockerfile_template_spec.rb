@@ -4,9 +4,7 @@ describe 'Dockerfile.erb' do # rubocop:disable RSpec/DescribeClass
   subject(:rendered_dockerfile) do
     path = File.expand_path('../src/Dockerfile.erb', File.dirname(__FILE__))
     template = File.open(path, &:read)
-    safe_level = nil
-    trim_mode = '-'
-    ERB.new(template, safe_level, trim_mode).result
+    ERB.new(template, trim_mode: '-').result
   end
 
   context 'when AUTO_DEVOPS_BUILD_IMAGE_FORWARDED_CI_VARIABLES is non-empty' do

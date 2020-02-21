@@ -2,7 +2,7 @@
 
 source 'https://rubygems.org'
 
-ruby '~> 2.5.5'
+ruby '~> 2.6.5'
 
 group :test do
   gem 'rspec'

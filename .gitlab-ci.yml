@@ -37,7 +37,8 @@ test-dockerfile:
   image: "$BUILD_IMAGE_NAME"
   script:
     - cd "$CI_PROJECT_DIR/test/ruby_with_dockerfile"
-    - /build/build.sh
+    - /build/build.sh | tee /tmp/build-output
+    - grep 'Building Dockerfile-based application...' /tmp/build-output
 
 # This test is to prevent a regression until https://github.com/docker/engine/pull/339 is out
 # See https://gitlab.com/gitlab-org/cluster-integration/auto-build-image/issues/13 for context
@@ -53,7 +54,8 @@ test-herokuish:
   image: "$BUILD_IMAGE_NAME"
   script:
     - cd "$CI_PROJECT_DIR/test/ruby"
-    - /build/build.sh
+    - /build/build.sh | tee /tmp/build-output
+    - grep 'Building Heroku-based application using gliderlabs/herokuish docker image...' /tmp/build-output
 
 test-run-herokuish:
   stage: test-run
@@ -75,7 +77,10 @@ test-herokuish-with-build-secrets:
     AUTO_DEVOPS_BUILD_IMAGE_FORWARDED_CI_VARIABLES: FORWARDED_VARIABLE_0,FORWARDED_VARIABLE_1
   script:
     - cd "$CI_PROJECT_DIR/test/ruby"
-    - /build/build.sh
+    # When BuildKit is enabled, docker logs go to stderr by design https://github.com/moby/moby/issues/40031
+    - /build/build.sh 2>&1 | tee /tmp/build-output
+    - grep 'FORWARDED_VARIABLE_0="my forwarded variable 0"' /tmp/build-output
+    - grep 'FORWARDED_VARIABLE_1="my forwarded variable 1"' /tmp/build-output
 
 test-herokuish-with-buildpack-url:
   stage: test
@@ -84,7 +89,8 @@ test-herokuish-with-buildpack-url:
     BUILDPACK_URL: https://github.com/HashNuke/heroku-buildpack-elixir.git
   script:
     - cd "$CI_PROJECT_DIR/test/elixir"
-    - /build/build.sh
+    - /build/build.sh | tee /tmp/build-output
+    - grep "Using default config from Elixir buildpack" /tmp/build-output
 
 test-rspec:
   stage: test

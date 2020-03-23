@@ -1,8 +1,12 @@
 variables:
   DOCKER_DRIVER: overlay2
 
+  # explicit tag to be used within pipeline
   BUILD_IMAGE_NAME: "$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA"
-  RELEASE_IMAGE_NAME: "$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:stable"
+
+  # we also publish a floating tag to simplify manual testing
+  BUILD_IMAGE_NAME_LATEST: "$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:latest"
+
   DOCKER_VERSION: 19.03.5
 
   CI_APPLICATION_TAG: "$CI_COMMIT_SHA"
@@ -23,8 +27,12 @@ build:
   before_script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
   script:
-    - docker build --build-arg DOCKER_VERSION="$DOCKER_VERSION" --tag "$BUILD_IMAGE_NAME" .
+    - docker build --build-arg DOCKER_VERSION="$DOCKER_VERSION"
+      --tag "$BUILD_IMAGE_NAME"
+      --tag "$BUILD_IMAGE_NAME_LATEST"
+      .
     - docker push "$BUILD_IMAGE_NAME"
+    - docker push "$BUILD_IMAGE_NAME_LATEST"
 
 test-shellcheck:
   stage: test
@@ -110,12 +118,47 @@ test-rubocop:
   script:
     - bundle exec rubocop Gemfile src spec
 
-release:
+.semantic-release:
+  image: node:12
+  stage: release
+  before_script:
+    - npm install -g semantic-release @semantic-release/gitlab
+  script:
+    - semantic-release $DRY_RUN_OPT -b $CI_COMMIT_REF_NAME
+  only:
+    variables:
+      - $CI_API_V4_URL == "https://gitlab.com/api/v4"
+
+release-tag:
   stage: release
   image: "docker:${DOCKER_VERSION}"
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  services:
+    - "docker:${DOCKER_VERSION}-dind"
   script:
+    - 'echo ${CI_JOB_TOKEN} | docker login --password-stdin -u $CI_REGISTRY_USER $CI_REGISTRY'
+    - export ci_image="${CI_REGISTRY_IMAGE}"
+    - export ci_image_tag=${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}
+    - echo "Using tag $ci_image_tag for image"
     - docker pull "$BUILD_IMAGE_NAME"
-    - docker tag "$BUILD_IMAGE_NAME" "$RELEASE_IMAGE_NAME"
-    - docker push "$RELEASE_IMAGE_NAME"
+    - docker tag "$BUILD_IMAGE_NAME" $ci_image:latest
+    - docker tag "$BUILD_IMAGE_NAME" $ci_image:$ci_image_tag
+    - docker push $ci_image:latest
+    - docker push $ci_image:$ci_image_tag
+  only:
+    - tags
+
+publish:
+  extends: .semantic-release
+  only:
+    refs:
+      - master@gitlab-org/cluster-integration/auto-build-image
+
+publish-dryrun:
+  extends: .semantic-release
+  variables:
+    DRY_RUN_OPT: '-d'
+  only:
+    - branches@gitlab-org/cluster-integration/auto-build-image
+  except:
+    refs:
+      - master

@@ -12,8 +12,6 @@ variables:
   CI_APPLICATION_TAG: "$CI_COMMIT_SHA"
   CI_APPLICATION_REPOSITORY: "$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG/$CI_JOB_NAME"
 
-services:
-  - "docker:${DOCKER_VERSION}-dind"
 
 stages:
   - build
@@ -24,6 +22,8 @@ stages:
 build:
   stage: build
   image: "docker:${DOCKER_VERSION}"
+  services:
+    - "docker:${DOCKER_VERSION}-dind"
   before_script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
   script:
@@ -37,12 +37,18 @@ build:
 test-shellcheck:
   stage: test
   image: koalaman/shellcheck-alpine
+  needs: []
   script:
     - shellcheck src/build.sh
 
-test-dockerfile:
+.test-build:
   stage: test
   image: "$BUILD_IMAGE_NAME"
+  services:
+    - "docker:${DOCKER_VERSION}-dind"
+
+test-dockerfile:
+  extends: .test-build
   script:
     - cd "$CI_PROJECT_DIR/test/ruby_with_dockerfile"
     - /build/build.sh | tee /tmp/build-output
@@ -51,15 +57,13 @@ test-dockerfile:
 # This test is to prevent a regression until https://github.com/docker/engine/pull/339 is out
 # See https://gitlab.com/gitlab-org/cluster-integration/auto-build-image/issues/13 for context
 test-redhat-registry:
-  stage: test
-  image: "$BUILD_IMAGE_NAME"
+  extends: .test-build
   script:
     - cd "$CI_PROJECT_DIR/test/redhat_registry"
     - /build/build.sh
 
 test-herokuish:
-  stage: test
-  image: "$BUILD_IMAGE_NAME"
+  extends: .test-build
   script:
     - cd "$CI_PROJECT_DIR/test/ruby"
     - /build/build.sh | tee /tmp/build-output
@@ -76,8 +80,7 @@ test-run-herokuish:
     - grep 'Hello World!' index.html
 
 test-cnb:
-  stage: test
-  image: "$BUILD_IMAGE_NAME"
+  extends: .test-build
   variables:
     AUTO_DEVOPS_BUILD_IMAGE_CNB_ENABLED: "true"
   script:
@@ -98,8 +101,7 @@ test-run-cnb:
     - grep 'Hello World!' index.html
 
 test-herokuish-with-build-secrets:
-  stage: test
-  image: "$BUILD_IMAGE_NAME"
+  extends: .test-build
   variables:
     FORWARDED_VARIABLE_0: 'my forwarded variable 0'
     FORWARDED_VARIABLE_1: 'my forwarded variable 1'
@@ -113,8 +115,7 @@ test-herokuish-with-build-secrets:
     - grep 'FORWARDED_VARIABLE_1="my forwarded variable 1"' /tmp/build-output
 
 test-cnb-with-build-secrets:
-  stage: test
-  image: "$BUILD_IMAGE_NAME"
+  extends: .test-build
   variables:
     AUTO_DEVOPS_BUILD_IMAGE_CNB_ENABLED: "true"
     FORWARDED_VARIABLE_0: 'my forwarded variable 0'
@@ -129,8 +130,7 @@ test-cnb-with-build-secrets:
     - grep 'FORWARDED_VARIABLE_1="my forwarded variable 1"' /tmp/build-output
 
 test-herokuish-with-buildpack-url:
-  stage: test
-  image: "$BUILD_IMAGE_NAME"
+  extends: .test-build
   variables:
     BUILDPACK_URL: https://github.com/HashNuke/heroku-buildpack-elixir.git
   script:
@@ -140,8 +140,7 @@ test-herokuish-with-buildpack-url:
     - grep "Using default config from Elixir buildpack" /tmp/build-output
 
 test-cnb-with-buildpack-url:
-  stage: test
-  image: "$BUILD_IMAGE_NAME"
+  extends: .test-build
   variables:
     AUTO_DEVOPS_BUILD_IMAGE_CNB_ENABLED: "true"
     BUILDPACK_URL: /tmp/elixir_buildpack
@@ -182,6 +181,7 @@ test-rspec:
 test-rubocop:
   stage: test
   image: ruby:2.6
+  needs: []
   before_script:
     - gem install bundler
     - bundle install --without test

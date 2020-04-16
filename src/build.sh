@@ -75,7 +75,7 @@ if [[ -n "$AUTO_DEVOPS_BUILD_IMAGE_FORWARDED_CI_VARIABLES" ]]; then
 fi
 
 # pull images for cache - this is required, otherwise --cache-from will not work
-docker image pull "$image_tagged" || \
+docker image pull "$image_previous" || \
   docker image pull "$image_latest" || \
   true
 

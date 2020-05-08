@@ -1,6 +1,6 @@
-ARG DOCKER_VERSION
+ARG DOCKER_VERSION=19.03.8
 
-FROM docker:${DOCKER_VERSION}
+FROM docker:19.03.8
 
 RUN apk add bash ruby wget
 RUN wget https://github.com/buildpacks/pack/releases/download/v0.9.0/pack-v0.9.0-linux.tgz && \
